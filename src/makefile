@@ -8,7 +8,7 @@ GENERATOR_SOURCES = ../graph500-newreference/generator/graph_generator.c ../grap
 LOCAL_HEADERS = graph.hpp csr.hpp
 LOCAL_SOURCES = graph.cpp csr.cpp main.cpp
 
-CPPFLAGS = -fopenmp -std=c++11 -g -Wall 
+CPPFLAGS = -fopenmp -std=c++11 -g -Wall -march=native -mavx
 CFLAGS = -fopenmp -std=gnu11 -g -Wall -I$(GENERATOR_HEADERS)
 
 all: includes locals

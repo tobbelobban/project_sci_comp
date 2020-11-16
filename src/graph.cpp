@@ -24,7 +24,7 @@ void read_graph_from_file(const char * filename, graph & g) {
     char * end;
     const int64_t nverts = (int) pow(2,strtol(filename, &end, 10));
     end++;
-    const int16_t nedges = strtol(end, &end, 10) * nverts;
+    const int64_t nedges = strtol(end, &end, 10) * nverts;
     if(errno == ERANGE) {
         printf("Range error occured while extracting scale and edge factor\n");
         exit(0);
@@ -32,7 +32,7 @@ void read_graph_from_file(const char * filename, graph & g) {
     packed_edge * edges = new packed_edge[nedges];
     int64_t edge_buffer[2];
     for(int i = 0; i < nedges; i++) {
-        fread(edge_buffer, 16, 1, file_ptr);
+        fread(edge_buffer, sizeof(packed_edge), 1, file_ptr);
         packed_edge pe = {edge_buffer[0], edge_buffer[1]};
         edges[i] = pe;
     }
@@ -73,6 +73,13 @@ void write_graph_to_file(const char* filename, const graph& g) {
         printf("FAILED TO OPEN FILE: %s\n", filename);
         exit(0);
     }
-    fwrite(g.edges, sizeof(packed_edge)*g.nedges, 1, file_ptr);
+    std::cout << g.nedges << std::endl;
+    for(int i = 0; i < g.nedges; ++i) {
+        size_t f = fwrite(&g.edges[i], sizeof(packed_edge), 1, file_ptr);
+        if(f == 0) {
+            std::cout << "Error writing code: " << ferror(file_ptr) << std::endl;
+        }
+    }
+        
     fclose(file_ptr);
 }

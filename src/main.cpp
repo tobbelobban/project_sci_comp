@@ -14,12 +14,15 @@ int main(int argc, char const *argv[]) {
     read_graph_from_file(argv[1], g);
     sort_graph_edges(g);
     write_graph_to_file(argv[1], g);
-    //print_graph_edges(g);
     delete_graph(g);
 
-    csr_graph csr_g;
-    read_csr_graph_from_file(argv[1], csr_g);
-    print_csr_graph(csr_g);
+    // csr_graph csr_g;
+    // read_csr_graph_from_file(argv[1], csr_g);
+    // auto res = csr_bfs(csr_g, 5);
+
+    
+
+    //delete_csr(csr_g);
     return 0;
 
 }
