@@ -9,20 +9,23 @@
 #include "make_graph.h"
 #include "graph.hpp"
 
-void read_graph_from_file(const char * filename, graph & g) {        
+void read_graph_from_file(const std::string& f_path, graph & g) {        
     // attempt to open file
     FILE *file_ptr;
-    file_ptr = fopen(filename, "rb");
+    file_ptr = fopen(f_path.c_str(), "rb");
     if(file_ptr == NULL) {
-        printf("FAILED TO OPEN FILE: %s\n", filename);
+        std::cout << "ERROR! Failed to open file: " << f_path << std::endl;
         exit(0);
     }
 
-    //read SCALE and EDGEFACTOR
-    // filename must be of format "SCALE_EDGEFACTOR_*"
+    //read SCALE and EDGEFACTOR from file path
+    // filename must be of format "path/to/file/SCALE_EDFEFACTOR_blablabla"
     errno = 0;
+    auto bottom_dir = f_path.find_last_of('/');
+    std::string dir = f_path.substr(0,bottom_dir);
+    const char* file = f_path.substr(bottom_dir, f_path.length()).c_str();
     char * end;
-    const int64_t nverts = (int) pow(2,strtol(filename, &end, 10));
+    const int64_t nverts = (int) pow(2,strtol(file, &end, 10));
     end++;
     const int64_t nedges = strtol(end, &end, 10) * nverts;
     if(errno == ERANGE) {
@@ -65,21 +68,34 @@ void print_graph_edges(const graph& g) {
     }
 }
 
-void write_graph_to_file(const char* filename, const graph& g) {
+void write_graph_to_file(const std::string& f_path, const graph& g) {
     // attempt to open file
     FILE *file_ptr;
-    file_ptr = fopen(filename, "wb");
+    file_ptr = fopen(f_path.c_str(), "wb");
     if(file_ptr == NULL) {
-        printf("FAILED TO OPEN FILE: %s\n", filename);
+        std::cout << "ERROR! Failed to open file: " << f_path << std::endl;
         exit(0);
     }
-    std::cout << g.nedges << std::endl;
+    // convert 64-bit nodes to 32-bit
+    uint32_t buffer[2];
     for(int i = 0; i < g.nedges; ++i) {
-        size_t f = fwrite(&g.edges[i], sizeof(packed_edge), 1, file_ptr);
+        buffer[0] = g.edges[i].v0;
+        buffer[1] = g.edges[i].v1;
+        size_t f = fwrite(buffer, sizeof(uint32_t), 2, file_ptr);
         if(f == 0) {
             std::cout << "Error writing code: " << ferror(file_ptr) << std::endl;
         }
     }
         
     fclose(file_ptr);
+}
+
+void generate_graph_to_file(const std::string& f_path, const uint32_t scale, const uint32_t edge_factor) {
+    graph g;
+    uint32_t nverts = (uint32_t)pow(2,scale);
+    uint32_t nedges = edge_factor * nverts;
+    make_graph(scale, nedges, 2421, 32, &g.nedges, &g.edges);
+    sort_graph_edges(g);
+    write_graph_to_file(f_path, g);
+    delete_graph(g);
 }

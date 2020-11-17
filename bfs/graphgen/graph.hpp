@@ -20,5 +20,5 @@ void sort_graph_edges(graph&);
 void delete_graph(graph&);
 void print_graph_edges(const graph&);
 void write_graph_to_file(const char*, const graph&);
-
+void generate_graph_to_file(const std::string&, const uint32_t, const uint32_t);
 #endif
