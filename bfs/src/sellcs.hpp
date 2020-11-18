@@ -19,10 +19,10 @@ typedef struct sellcs {
 
 } sellcs;
 
-typedef struct vq {
-    std::queue<int32_t> e;
+typedef struct vertex {
+    int32_t degree;
     int32_t vid;
-} vq;
+} vertex;
 
 void read_sellcs_graph_from_file(const std::string&, sellcs&);
 void print_sellcs_graph(const sellcs&);

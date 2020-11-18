@@ -35,8 +35,9 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g)
         printf("Range error occured while extracting scale and edge factor\n");
         exit(0);
     }
-    std::vector<vq> edges(nverts,vq());
-    for(int32_t vid = 0; vid < nverts; ++vid) edges[vid].vid = vid;
+    std::vector<std::queue<int32_t>> edges(nverts, std::queue<int32_t>());
+    std::vector<vertex> vertex_degs(nverts, vertex());
+    for(int32_t vid = 0; vid < nverts; ++vid) vertex_degs[vid].vid = vid;
     const int32_t num_chunks = nverts/sellcs_g.C; 
     sellcs_g.nverts = nverts;
     sellcs_g.n_chunks = num_chunks;
@@ -55,22 +56,26 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g)
             max = edge_buffer[0];
         } 
         if(min == prev_min && max == prev_max) continue; // skip duplicates
-        edges[min].e.push(max);
-        edges[max].e.push(min);
+        edges[min].push(max);
+        edges[max].push(min);
         e_count += 2;
-        sellcs_g.cl[min/sellcs_g.C] = std::max(sellcs_g.cl[min/sellcs_g.C],(int32_t)edges[min].e.size());
-        sellcs_g.cl[max/sellcs_g.C] = std::max(sellcs_g.cl[max/sellcs_g.C],(int32_t)edges[max].e.size());
         prev_min = min;
         prev_max = max;
     }
     fclose(file_ptr);
-    //std::sort(edges.begin(), edges.end(), [](const vq& v1, const vq& v2){return v1.e.size() > v2.e.size();});
+    for(int32_t vid = 0; vid < nverts; ++vid) vertex_degs[vid].degree = edges[vid].size();
+    for(int32_t i = 0; i < nverts/sellcs_g.sigma; ++i) {
+        int32_t offs_front = i*sellcs_g.sigma;
+        int32_t offs_back =  (i+1)*sellcs_g.sigma;
+        std::partial_sort(vertex_degs.begin()+offs_front,vertex_degs.begin()+offs_back, vertex_degs.begin()+offs_back,[](const vertex& v1, const vertex& v2){return v1.degree > v2.degree;});
+    }
+    //std::sort(vertex_degs.begin(), vertex_degs.end(), [](const vertex& v1, const vertex& v2){return v1.degree > v2.degree;});
     sellcs_g.permuts = new int32_t[nverts];
-    for(int32_t vid = 0; vid < nverts; ++vid) sellcs_g.permuts[edges[vid].vid] = vid;
+    for(int32_t vid = 0; vid < nverts; ++vid) sellcs_g.permuts[vertex_degs[vid].vid] = vid;
     int32_t size = 0;
     sellcs_g.cs = new int32_t[num_chunks];
     for(int32_t c = 0; c < num_chunks; ++c) {
-        //sellcs_g.cl[c] = edges[c*sellcs_g.C].e.size();
+        sellcs_g.cl[c] = vertex_degs[c*sellcs_g.C].degree;
         sellcs_g.cs[c] = size;
         size += sellcs_g.cl[c]*sellcs_g.C;
     }
@@ -80,12 +85,12 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g)
     for(int32_t c = 0; c < num_chunks; ++c) {
         for(int32_t l = 0; l < sellcs_g.cl[c]; ++l) {
             for(int32_t r = 0; r < sellcs_g.C; ++r) {
-                vid = c*sellcs_g.C+r;
-                if(edges[vid].e.empty()) {
+                vid = vertex_degs[c*sellcs_g.C+r].vid;
+                if(edges[vid].empty()) {
                     sellcs_g.cols[sellcs_g.cs[c]+l*sellcs_g.C+r] = -1;    
                 } else {
-                    sellcs_g.cols[sellcs_g.cs[c]+l*sellcs_g.C+r] = sellcs_g.permuts[edges[vid].e.front()];
-                    edges[vid].e.pop();
+                    sellcs_g.cols[sellcs_g.cs[c]+l*sellcs_g.C+r] = sellcs_g.permuts[edges[vid].front()];
+                    edges[vid].pop();
                 }
             } 
         }

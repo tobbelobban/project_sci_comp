@@ -28,7 +28,7 @@ int main(int argc, char const *argv[]) {
 
     sellcs sellcs_g;
     sellcs_g.C = 4;
-    sellcs_g.sigma = 1;
+    sellcs_g.sigma = 1024;
     time = omp_get_wtime();
     read_sellcs_graph_from_file(file_path, sellcs_g);
     time = omp_get_wtime() - time;
