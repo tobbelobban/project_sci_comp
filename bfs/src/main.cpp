@@ -9,18 +9,38 @@ int main(int argc, char const *argv[]) {
     }
 
     std::string file_path(argv[1]);
+    double time;
 
     csr_graph csr_g;
+    time = omp_get_wtime();
     read_csr_graph_from_file(file_path, csr_g);
-    print_csr_graph(csr_g);
+    time = omp_get_wtime() - time;
+    std::cout << "CSR read time: " << time << " s" << std::endl;
+    //print_csr_graph(csr_g);
+    time = omp_get_wtime();
+    auto csr_res = csr_bfs_iin(csr_g, 2);
+    time = omp_get_wtime() - time;
+    std::cout << "CSR solve time: " << time << " s" << std::endl;
+    //print_vector(csr_res);
     delete_csr(csr_g);
 
-    std::cout << std::endl;
+    //std::cout << std::endl;
 
     sellcs sellcs_g;
-    sellcs_g.C = 2;
+    sellcs_g.C = 4;
+    sellcs_g.sigma = 1;
+    time = omp_get_wtime();
     read_sellcs_graph_from_file(file_path, sellcs_g);
+    time = omp_get_wtime() - time;
+    std::cout << "SELL-C-sigma read time: " << time << " s" << std::endl;
+    std::cout << "SELL-C-sigma beta = " << sellcs_g.beta << std::endl;
     print_sellcs_graph(sellcs_g);
+    time = omp_get_wtime();
+    auto sellcs_res = sellcs_bfs(sellcs_g, 2);
+    time = omp_get_wtime() - time;
+    std::cout << "SELL-" << sellcs_g.C << '-' << sellcs_g.sigma << " solve time: " << time << " s" << std::endl;
+    //print_vector(sellcs_res);
+    std::cout << "Same solution? " << (same(sellcs_res, csr_res) ? "yes" : "no") << std::endl;
     delete_sellcs(sellcs_g);
 
     return 0;

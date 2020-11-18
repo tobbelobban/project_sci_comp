@@ -12,12 +12,15 @@ typedef struct sellcs {
     int32_t* cs;
     int32_t* cl;
     int32_t* cols;
+    double beta;
+    int32_t sigma;
 
 } sellcs;
 
 void read_sellcs_graph_from_file(const std::string&, sellcs&);
 void print_sellcs_graph(const sellcs&);
 void tropical_sellcs_mv_mult(std::vector<int32_t>&, const sellcs&, const std::vector<int32_t>&);
+std::vector<int32_t> sellcs_bfs(const sellcs&, const int32_t);
 void delete_sellcs(sellcs&);
 
 #endif

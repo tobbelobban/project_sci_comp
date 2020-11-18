@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <iostream>
+#include <algorithm>
 #include <cmath>
 #include <queue>
 #include <cstring>
@@ -43,6 +44,7 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g)
     std::memset(sellcs_g.cl, 0, num_chunks*sizeof(int32_t));
     int32_t edge_buffer[2];
     int32_t prev_min = 0, prev_max = 0, min, max;
+    int64_t e_count = 0;
     for(int32_t i = 0; i < nedges; ++i) {
         fread(edge_buffer, sizeof(int32_t), 2, file_ptr);
         min = edge_buffer[0];
@@ -55,22 +57,24 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g)
         if(min == prev_min && max == prev_max) continue; // skip duplicates
         edges[min].push(max);
         edges[max].push(min);
+        e_count += 2;
         sellcs_g.cl[min/sellcs_g.C] = std::max(sellcs_g.cl[min/sellcs_g.C],(int32_t)edges[min].size());
         sellcs_g.cl[max/sellcs_g.C] = std::max(sellcs_g.cl[max/sellcs_g.C],(int32_t)edges[max].size());
         prev_min = min;
         prev_max = max;
     }
     fclose(file_ptr);
-    
+    std::sort(edges.begin(), edges.end(), [](const std::queue<int32_t>& q1, const std::queue<int32_t>& q2){return q1.size() > q2.size();});
     int32_t size = 0;
     sellcs_g.cs = new int32_t[num_chunks];
     for(int32_t c = 0; c < num_chunks; ++c) {
+        sellcs_g.cl[c] = edges[c].size();
         sellcs_g.cs[c] = size;
         size += sellcs_g.cl[c]*sellcs_g.C;
     }
     sellcs_g.cols = new int32_t[size];
+    sellcs_g.beta = (double)e_count / (double)size;
     int32_t vid;
-
     for(int32_t c = 0; c < num_chunks; ++c) {
         for(int32_t l = 0; l < sellcs_g.cl[c]; ++l) {
             for(int32_t r = 0; r < sellcs_g.C; ++r) {
@@ -87,14 +91,23 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g)
 }
 
 void tropical_sellcs_mv_mult(std::vector<int32_t>& y, const sellcs& g, const std::vector<int32_t>& x) {
-    // for(int i = 0; i < g.n_chunks; ++i) {
-    //     for(int j = 0; j < g.cl[i]; ++j) {
-    //         y[i*g.C+0] = std::min(y[i*g.C+0], );
-    //         y[i*g.C+1] = std::min(y[i*g.C+1],);
-    //         y[i*g.C+2] = std::min(y[i*g.C+2],);
-    //         y[i*g.C+3] = std::min(y[i*g.C+3],);
-    //     }
-    // }
+    __m128i ones = _mm_set_epi32(1,1,1,1), m_ones = _mm_set_epi32(-1,-1,-1,-1), infs = _mm_set_epi32(g.nverts, g.nverts, g.nverts, g.nverts);
+    #pragma omp parallel for
+    for(int32_t i = 0; i < g.n_chunks; ++i) {
+        __m128i tmps, col, vals, rhs;
+        int32_t c_offs;
+        tmps = _mm_load_si128((__m128i*)&x[i*g.C]); // load chunk from frontier (x)
+        c_offs = g.cs[i];
+        for(int32_t j = 0; j < g.cl[i]; ++j) {
+            col = _mm_load_si128((__m128i*)&g.cols[c_offs]);
+            vals = _mm_cmpeq_epi32(m_ones,col);
+            vals = _mm_blendv_epi8(ones,infs,vals);
+            rhs = _mm_set_epi32(x[g.cols[c_offs+3]], x[g.cols[c_offs+2]], x[g.cols[c_offs+1]], x[g.cols[c_offs+0]]);
+            tmps = _mm_min_epi32(_mm_add_epi32(rhs,vals),tmps);
+            c_offs += g.C;
+        }
+        _mm_store_si128((__m128i*)&y[i*g.C], tmps);
+    }
 }
 
 std::vector<int32_t> sellcs_bfs(const sellcs& g, const int32_t r) {
