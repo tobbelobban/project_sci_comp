@@ -77,11 +77,11 @@ void write_graph_to_file(const std::string& f_path, const graph& g) {
         exit(0);
     }
     // convert 64-bit nodes to 32-bit
-    uint32_t buffer[2];
+    int32_t buffer[2];
     for(int i = 0; i < g.nedges; ++i) {
         buffer[0] = g.edges[i].v0;
         buffer[1] = g.edges[i].v1;
-        size_t f = fwrite(buffer, sizeof(uint32_t), 2, file_ptr);
+        size_t f = fwrite(buffer, sizeof(int32_t), 2, file_ptr);
         if(f == 0) {
             std::cout << "Error writing code: " << ferror(file_ptr) << std::endl;
         }
@@ -90,11 +90,11 @@ void write_graph_to_file(const std::string& f_path, const graph& g) {
     fclose(file_ptr);
 }
 
-void generate_graph_to_file(const std::string& f_path, const uint32_t scale, const uint32_t edge_factor) {
+void generate_graph_to_file(const std::string& f_path, const uint64_t scale, const uint64_t edge_factor, uint64_t s1, uint64_t s2) {
     graph g;
-    uint32_t nverts = (uint32_t)pow(2,scale);
-    uint32_t nedges = edge_factor * nverts;
-    make_graph(scale, nedges, 2421, 32, &g.nedges, &g.edges);
+    int64_t nverts = (uint32_t)pow(2,scale);
+    int64_t nedges = edge_factor * nverts;
+    make_graph(scale, nedges, s1, s2, &g.nedges, &g.edges);
     sort_graph_edges(g);
     write_graph_to_file(f_path, g);
     delete_graph(g);

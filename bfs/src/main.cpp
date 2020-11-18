@@ -22,10 +22,6 @@ int main(int argc, char const *argv[]) {
     read_sellcs_graph_from_file(file_path, sellcs_g);
     print_sellcs_graph(sellcs_g);
     delete_sellcs(sellcs_g);
-    
-    std::cout << std::endl;
-    
-
 
     return 0;
 
