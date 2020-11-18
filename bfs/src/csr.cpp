@@ -5,7 +5,7 @@
 #include <iostream>
 #include <cmath>
 #include <queue>
-
+#include <omp.h>
 #include <immintrin.h>
 #include "csr.hpp"
 
@@ -126,20 +126,9 @@ void tropical_iin_csr_mv_mult(std::vector<int32_t>& y, const csr_graph& csr_g, c
 }
 
 void tropical_csr_mv_mult(std::vector<int32_t>& y, const csr_graph& csr_g, const std::vector<int32_t>& x) {
-    int32_t tmp0, tmp1, tmp2, tmp3;
     for(int32_t i = 0; i < csr_g.nverts; ++i) {
-        tmp0 = tmp1 = tmp2 = tmp3 = csr_g.nverts;
-        int64_t j;
-        for(j = csr_g.rows[i]; j < (int64_t)csr_g.rows[i+1]-3; j+=4) {
-            tmp0 = std::min(tmp0, 1+x[csr_g.cols[j+0]]);
-            tmp1 = std::min(tmp1, 1+x[csr_g.cols[j+1]]);
-            tmp2 = std::min(tmp2, 1+x[csr_g.cols[j+2]]);
-            tmp3 = std::min(tmp3, 1+x[csr_g.cols[j+3]]);
-            
-        }
-        y[i] = std::min(y[i],std::min(std::min(tmp0,tmp1), std::min(tmp2,tmp3))); // reduce
-        for(; j < csr_g.rows[i+1]; ++j) {  // clean up last part of loop
-            y[i] = std::min(y[i], 1+x[csr_g.cols[j]]);
+        for(int64_t j = csr_g.rows[i]; j < (int64_t)csr_g.rows[i+1]; ++j) {
+            y[i] = std::min(y[i],1+x[csr_g.cols[j]]);
         }
     }
 }
@@ -161,10 +150,17 @@ std::vector<int32_t> csr_bfs(const csr_graph& csr_g, const int32_t r) {
     if(r < 0 || r >= csr_g.nverts) return dists;
     dists[r] = 0;
     std::vector<int32_t> prev_dists(csr_g.nverts,0);
+    double total_t = 0, t;
+    int32_t its = 0;
     while(!same(dists,prev_dists)) {
         prev_dists = dists;
+        t = omp_get_wtime();
         tropical_csr_mv_mult(dists, csr_g, prev_dists);
+        total_t += omp_get_wtime() - t;
+        ++its;
     }
+    std::cout << "avg time CSR = " << total_t/its << std::endl;
+    std::cout << "iterations = " << its << std::endl;
     return dists;
 }
 
