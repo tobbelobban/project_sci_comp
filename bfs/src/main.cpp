@@ -41,7 +41,7 @@ int main(int argc, char const *argv[]) {
     std::cout << "SELL-" << sellcs_g.C << '-' << sellcs_g.sigma << " solve time: " << time << " s" << std::endl;
     permutate_solution(sellcs_res, sellcs_g);
     //print_vector(sellcs_res);
-    //std::cout << "Same solution? " << (same(sellcs_res, csr_res) ? "yes" : "no") << std::endl;
+    std::cout << "Same solution? " << (same(sellcs_res, csr_res) ? "yes" : "no") << std::endl;
     delete_sellcs(sellcs_g);
 
     return 0;

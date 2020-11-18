@@ -58,19 +58,19 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g)
         edges[min].e.push(max);
         edges[max].e.push(min);
         e_count += 2;
-        //sellcs_g.cl[min/sellcs_g.C] = std::max(sellcs_g.cl[min/sellcs_g.C],(int32_t)edges[min].e.size());
-        //sellcs_g.cl[max/sellcs_g.C] = std::max(sellcs_g.cl[max/sellcs_g.C],(int32_t)edges[max].e.size());
+        sellcs_g.cl[min/sellcs_g.C] = std::max(sellcs_g.cl[min/sellcs_g.C],(int32_t)edges[min].e.size());
+        sellcs_g.cl[max/sellcs_g.C] = std::max(sellcs_g.cl[max/sellcs_g.C],(int32_t)edges[max].e.size());
         prev_min = min;
         prev_max = max;
     }
     fclose(file_ptr);
-    std::sort(edges.begin(), edges.end(), [](const vq& v1, const vq& v2){return v1.e.size() > v2.e.size();});
+    //std::sort(edges.begin(), edges.end(), [](const vq& v1, const vq& v2){return v1.e.size() > v2.e.size();});
     sellcs_g.permuts = new int32_t[nverts];
     for(int32_t vid = 0; vid < nverts; ++vid) sellcs_g.permuts[edges[vid].vid] = vid;
     int32_t size = 0;
     sellcs_g.cs = new int32_t[num_chunks];
     for(int32_t c = 0; c < num_chunks; ++c) {
-        sellcs_g.cl[c] = edges[c*sellcs_g.C].e.size();
+        //sellcs_g.cl[c] = edges[c*sellcs_g.C].e.size();
         sellcs_g.cs[c] = size;
         size += sellcs_g.cl[c]*sellcs_g.C;
     }
