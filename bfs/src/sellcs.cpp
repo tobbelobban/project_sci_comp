@@ -46,6 +46,7 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g)
     int32_t edge_buffer[2];
     int32_t prev_min = 0, prev_max = 0, min, max;
     int64_t e_count = 0;
+    double t = omp_get_wtime();
     for(int32_t i = 0; i < nedges; ++i) {
         fread(edge_buffer, sizeof(int32_t), 2, file_ptr);
         min = edge_buffer[0];
@@ -63,12 +64,17 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g)
         prev_max = max;
     }
     fclose(file_ptr);
+    t = omp_get_wtime() - t;
+    std::cout << "SELL-C-S reading took " << t << " s" << std::endl;
     for(int32_t vid = 0; vid < nverts; ++vid) vertex_degs[vid].degree = edges[vid].size();
+    t = omp_get_wtime();
     for(int32_t i = 0; i < nverts/sellcs_g.sigma; ++i) {
         int32_t offs_front = i*sellcs_g.sigma;
         int32_t offs_back =  (i+1)*sellcs_g.sigma;
         std::partial_sort(vertex_degs.begin()+offs_front,vertex_degs.begin()+offs_back, vertex_degs.begin()+offs_back,[](const vertex& v1, const vertex& v2){return v1.degree > v2.degree;});
     }
+    t = omp_get_wtime() - t;
+    std::cout << "Sorting took " << t << " s" << std::endl;
     //std::sort(vertex_degs.begin(), vertex_degs.end(), [](const vertex& v1, const vertex& v2){return v1.degree > v2.degree;});
     sellcs_g.permuts = new int32_t[nverts];
     for(int32_t vid = 0; vid < nverts; ++vid) sellcs_g.permuts[vertex_degs[vid].vid] = vid;
@@ -98,23 +104,42 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g)
 }
 
 void tropical_sellcs_mv_mult(std::vector<int32_t>& y, const sellcs& g, const std::vector<int32_t>& x) {
-    __m128i ones = _mm_set_epi32(1,1,1,1), m_ones = _mm_set_epi32(-1,-1,-1,-1), infs = _mm_set_epi32(g.nverts, g.nverts, g.nverts, g.nverts);
-    __m128i tmps, col, vals, rhs;
+    __m256i ones = _mm256_set1_epi32(1), m_ones = _mm256_set1_epi32(-1), infs = _mm256_set1_epi32(g.nverts);
+    __m256i tmps, col, vals, rhs;
     int32_t c_offs;
     for(int32_t i = 0; i < g.n_chunks; ++i) {
-        tmps = _mm_load_si128((__m128i*)&x[i*g.C]); // load chunk from frontier (x)
+        tmps = _mm256_loadu_si256((__m256i*)&x[i*g.C]); // load chunk from frontier (x)
         c_offs = g.cs[i];
         for(int32_t j = 0; j < g.cl[i]; ++j) {
-            col = _mm_load_si128((__m128i*)&g.cols[c_offs]);
-            vals = _mm_cmpeq_epi32(m_ones,col);
-            vals = _mm_blendv_epi8(ones,infs,vals);
-            rhs = _mm_set_epi32(x[g.cols[c_offs+3]], x[g.cols[c_offs+2]], x[g.cols[c_offs+1]], x[g.cols[c_offs+0]]);
-            tmps = _mm_min_epi32(_mm_add_epi32(rhs,vals),tmps);
+            col = _mm256_loadu_si256((__m256i*)&g.cols[c_offs]);
+            vals = _mm256_cmpeq_epi32(m_ones,col);
+            vals = _mm256_blendv_epi8(ones,infs,vals);
+            rhs = _mm256_set_epi32(x[g.cols[c_offs+7]],x[g.cols[c_offs+6]],x[g.cols[c_offs+5]],x[g.cols[c_offs+4]],x[g.cols[c_offs+3]], x[g.cols[c_offs+2]], x[g.cols[c_offs+1]], x[g.cols[c_offs+0]]);
+            tmps = _mm256_min_epi32(_mm256_add_epi32(rhs,vals),tmps);
             c_offs += g.C;
         }
-        _mm_store_si128((__m128i*)&y[i*g.C], tmps);
+        _mm256_storeu_si256((__m256i*)&y[i*g.C], tmps);
     }
 }
+
+// void tropical_sellcs_mv_mult(std::vector<int32_t>& y, const sellcs& g, const std::vector<int32_t>& x) {
+//     __m128i ones = _mm_set_epi32(1,1,1,1), m_ones = _mm_set_epi32(-1,-1,-1,-1), infs = _mm_set_epi32(g.nverts, g.nverts, g.nverts, g.nverts);
+//     __m128i tmps, col, vals, rhs;
+//     int32_t c_offs;
+//     for(int32_t i = 0; i < g.n_chunks; ++i) {
+//         tmps = _mm_load_si128((__m128i*)&x[i*g.C]); // load chunk from frontier (x)
+//         c_offs = g.cs[i];
+//         for(int32_t j = 0; j < g.cl[i]; ++j) {
+//             col = _mm_load_si128((__m128i*)&g.cols[c_offs]);
+//             vals = _mm_cmpeq_epi32(m_ones,col);
+//             vals = _mm_blendv_epi8(ones,infs,vals);
+//             rhs = _mm_set_epi32(x[g.cols[c_offs+3]], x[g.cols[c_offs+2]], x[g.cols[c_offs+1]], x[g.cols[c_offs+0]]);
+//             tmps = _mm_min_epi32(_mm_add_epi32(rhs,vals),tmps);
+//             c_offs += g.C;
+//         }
+//         _mm_store_si128((__m128i*)&y[i*g.C], tmps);
+//     }
+// }
 
 std::vector<int32_t> sellcs_bfs(const sellcs& g, const int32_t r) {
     std::vector<int32_t> dists(g.nverts, g.nverts);
