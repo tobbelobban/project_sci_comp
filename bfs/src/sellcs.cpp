@@ -13,12 +13,6 @@
 #include "sellcs.hpp"
 #include <sys/time.h>
 
-double cpuSecond() {
-    struct timeval tp;
-    gettimeofday(&tp,NULL);
-    return ((double)tp.tv_sec + (double)tp.tv_usec*1.e-6);
-}
-
 void local_sort(std::vector<vertex> &v, const sellcs &g) {
     std::vector<vertex> tmp(v);
     #pragma omp parallel for 
@@ -263,32 +257,28 @@ void tropical_sellcs_mv_mult_w4(std::vector<int32_t>& y, const sellcs& g, const 
     }
 }
 
-std::vector<int32_t> sellcs_bfs(const sellcs& g, const int32_t r) {
+std::vector<int32_t> sellcs_bfs(const sellcs& g, const int32_t r, double* const timer) {
     std::vector<int32_t> dists(g.nverts, g.nverts);
     if(r >= g.nverts || r < 0) return dists;
     dists[get_permutated_vid(r, g)] = 0;
-    double total_t = 0, t;
     std::vector<int32_t> prev_dists(g.nverts,0);
     int32_t its = 0;
+    timer[0] = cpuSecond();
     if(g.C == 8) {
         while(!same(dists,prev_dists)) {
             prev_dists = dists;
-            t = omp_get_wtime();
             tropical_sellcs_mv_mult_w8(dists, g, prev_dists);
-            total_t += omp_get_wtime() - t;
             ++its;
         }
     } else {
         while(!same(dists,prev_dists)) {
             prev_dists = dists;
-            t = omp_get_wtime();
             tropical_sellcs_mv_mult_w4(dists, g, prev_dists);
-            total_t += omp_get_wtime() - t;
             ++its;
         }
     }
-    std::cout << "avg time SELL-C-S = " << total_t/its << std::endl;
-    std::cout << "iterations = " << its << std::endl;
+    timer[0] = cpuSecond() - timer[0];
+    timer[1] = its;
     return dists;
 }
 

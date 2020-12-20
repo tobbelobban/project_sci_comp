@@ -9,7 +9,7 @@
 #include <immintrin.h>
 #include "csr.hpp"
 
-void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g, int32_t SCALE, int32_t EDGEFACTOR) {
+void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g, int32_t SCALE, int32_t EDGEFACTOR, double* const timer) {
 
     // assuming that the edges are sorted in file, 32-bit vert ids
     auto bottom_dir = file_path.find_last_of('/')+1;
@@ -34,7 +34,9 @@ void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g, in
     int32_t *edge_buffer = new int32_t[nedges*2];
     
     // read edges to buffer
+    timer[0] = cpuSecond();
     auto read_res = fread(edge_buffer, 2*sizeof(int32_t), nedges, file_ptr);
+    timer[0] = cpuSecond() - timer[0];
     fclose(file_ptr);
     if(read_res != (size_t)nedges) 
     {
@@ -43,6 +45,7 @@ void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g, in
     }
 
     // process edges
+    timer[1] = cpuSecond();
     int32_t prev_min = 0, prev_max = 0, min, max, count = 0;
     for(int32_t i = 0; i < nedges; ++i) {
         min = edge_buffer[i*2];
@@ -59,6 +62,7 @@ void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g, in
         prev_min = min;
         prev_max = max;
     }
+    timer[1] = cpuSecond() - timer[1];
     delete edge_buffer;
 
     // CSR members
@@ -67,8 +71,9 @@ void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g, in
     csr_g.nverts = nverts;
     csr_g.nedges = count;
 
-    // set edges
+    // set edges in CSR
     count = 0;
+    timer[2] = cpuSecond();
     for(int32_t v = 0; v < nverts; ++v) {
         csr_g.rows[v] = count;
         while(!edges[v].empty()) {
@@ -76,6 +81,7 @@ void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g, in
             edges[v].pop();
         }
     }
+    timer[2] = cpuSecond() - timer[2];
     csr_g.rows[nverts] = count;
 }
 
@@ -144,34 +150,37 @@ void tropical_csr_mv_mult(std::vector<int32_t>& y, const csr_graph& csr_g, const
     }
 }
 
-std::vector<int32_t> csr_bfs_iin(const csr_graph& csr_g, const int32_t r) {
+std::vector<int32_t> csr_bfs_iin(const csr_graph& csr_g, const int32_t r, double* const timer) {
     std::vector<int32_t> dists(csr_g.nverts, csr_g.nverts);
     if(r >= csr_g.nverts) return dists;
     dists[r] = 0;
     std::vector<int32_t> prev_dists(csr_g.nverts,0);
+    int32_t its = 0;
+    timer[0] = cpuSecond();
     while(!same(dists,prev_dists)) {
         prev_dists = dists;
         tropical_iin_csr_mv_mult(dists, csr_g, prev_dists);
+        ++its;
     }
+    timer[0] = cpuSecond() - timer[0];
+    timer[1] = its;
     return dists;
 }
 
-std::vector<int32_t> csr_bfs(const csr_graph& csr_g, const int32_t r) {
+std::vector<int32_t> csr_bfs(const csr_graph& csr_g, const int32_t r, double* const timer) {
     std::vector<int32_t> dists(csr_g.nverts, csr_g.nverts);
     if(r < 0 || r >= csr_g.nverts) return dists;
     dists[r] = 0;
     std::vector<int32_t> prev_dists(csr_g.nverts,0);
-    double total_t = 0, t;
     int32_t its = 0;
+    timer[0] = cpuSecond();
     while(!same(dists,prev_dists)) {
         prev_dists = dists;
-        t = omp_get_wtime();
         tropical_csr_mv_mult(dists, csr_g, prev_dists);
-        total_t += omp_get_wtime() - t;
         ++its;
     }
-    std::cout << "avg time CSR = " << total_t/its << std::endl;
-    std::cout << "iterations = " << its << std::endl;
+    timer[0] = cpuSecond() - timer[0];
+    timer[1] = its;
     return dists;
 }
 

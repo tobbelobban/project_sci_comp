@@ -4,6 +4,13 @@
 #include <omp.h>
 #include "csr.hpp"
 #include "sellcs.hpp"
+#include <sys/time.h>
+
+double cpuSecond() {
+    struct timeval tp;
+    gettimeofday(&tp,NULL);
+    return ((double)tp.tv_sec + (double)tp.tv_usec*1.e-6);
+}
 
 int main(int argc, char *const *argv) {
 
@@ -82,10 +89,10 @@ int main(int argc, char *const *argv) {
         exit(0);
     }
 
-    // timer indices (for SELL-C-SIGMA) have following defintions:
+    // timer indices have following defintions:
         // timer[0] = time to read graph to buffer
         // timer[1] = time to process edges in buffer
-        // timer[2] = time to sort edges
+        // timer[2] = time to sort edges (does not exist for CSR)
         // timer[3] = time to create SELL-C-SIGMA datastructure
 
     double CSR_timer[5], SELLCS_timer[5];
@@ -93,9 +100,32 @@ int main(int argc, char *const *argv) {
     if(mode & 1) 
     {
         csr_graph csr_g;
-        read_csr_graph_from_file(file_path, csr_g, SCALE, EDGEFACTOR);
-        CSR_res = csr_bfs(csr_g, root);
-        delete_csr(csr_g);
+        
+        // timing for reading graph
+        std::cout << "-- CSR --\n" << std::endl;
+        std::cout << "Creating CSR from file, please wait...";
+        std::flush(std::cout);
+
+        read_csr_graph_from_file(file_path, csr_g, SCALE, EDGEFACTOR, CSR_timer);
+        
+        std::cout << " done!" << std::endl;
+        std::cout <<  "Buffer read time: \t\t" << CSR_timer[0] << " s"  << std::endl;
+        std::cout << "Process buffer time: \t\t" << CSR_timer[1] << " s"  << std::endl;
+        std::cout << "Create CSR time: \t\t" << CSR_timer[2] << " s"  << std::endl;
+        std::cout << std::endl;
+
+        std::cout << "Computing BFS with CSR, please wait...";
+        std::flush(std::cout);
+
+        CSR_res = csr_bfs_iin(csr_g, root, CSR_timer);
+        
+        std::cout << " done!" << std::endl;
+        std::cout << "Number of iterations: \t\t" << (int)CSR_timer[1] << std::endl;
+        std::cout << "Total compute time: \t\t" << CSR_timer[0] << " s" << std::endl;
+        std::cout << "Average time per iteration: \t" << CSR_timer[0]/CSR_timer[1] << " s" << std::endl;
+        std::cout << std::endl;
+        
+        delete_csr(csr_g);    
     }
 
     // BFS with SELL-C-SIGMA datastructure
@@ -104,17 +134,34 @@ int main(int argc, char *const *argv) {
         sellcs sellcs_g;
         sellcs_g.C = chunk_size;
         sellcs_g.sigma = pow(2,sigma);
-        read_sellcs_graph_from_file(file_path, sellcs_g, SCALE, EDGEFACTOR, SELLCS_timer);
-        SELLCS_res = sellcs_bfs(sellcs_g, root);
-        permutate_solution(SELLCS_res, sellcs_g);
-        delete_sellcs(sellcs_g);
 
-        // print times with SELL-C-SIGMA   
-        std::cout << "--SELL-C-SIGMA--" << std::endl;
+        // timing for reading graph
+        std::cout << "-- SELL-C-SIGMA --\n" << std::endl;
+        std::cout << "Creating SELL-C-SIGMA from file, please wait...";
+        std::flush(std::cout);
+
+        read_sellcs_graph_from_file(file_path, sellcs_g, SCALE, EDGEFACTOR, SELLCS_timer);
+        
+        std::cout << " done!" << std::endl;
         std::cout <<  "Buffer read time: \t\t" << SELLCS_timer[0] << " s"  << std::endl;
-        std::cout << "Process edges time: \t\t" << SELLCS_timer[1] << " s"  << std::endl;
+        std::cout << "Process buffer time: \t\t" << SELLCS_timer[1] << " s"  << std::endl;
         std::cout << "Sort vertices time: \t\t" << SELLCS_timer[2] << " s"  << std::endl;
         std::cout << "Create SELL-C-SIGMA time: \t" << SELLCS_timer[3] << " s"  << std::endl;
+        std::cout << std::endl;
+        
+        std::cout << "Computing BFS with SELL-C-SIGMA, please wait...";
+        std::flush(std::cout);
+
+        SELLCS_res = sellcs_bfs(sellcs_g, root, SELLCS_timer);
+        permutate_solution(SELLCS_res, sellcs_g);
+        
+        std::cout << " done!" << std::endl;
+        std::cout << "Number of iterations: \t\t" << (int)SELLCS_timer[1] << std::endl;
+        std::cout << "Total compute time: \t\t" << SELLCS_timer[0] << " s" << std::endl;
+        std::cout << "Average time per iteration: \t" << SELLCS_timer[0]/SELLCS_timer[1] << " s" << std::endl;
+        std::cout << std::endl;
+
+        delete_sellcs(sellcs_g);    
     }
 
     if((mode & 1) && (mode & 2))
