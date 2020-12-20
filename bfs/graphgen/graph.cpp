@@ -82,8 +82,10 @@ void write_graph_to_file(const std::string& f_path, const graph& g) {
         buffer[0] = g.edges[i].v0;
         buffer[1] = g.edges[i].v1;
         size_t f = fwrite(buffer, sizeof(int32_t), 2, file_ptr);
-        if(f == 0) {
-            std::cout << "Error writing code: " << ferror(file_ptr) << std::endl;
+        if(f != 2) {
+            std::cout << "Error writing graph... exiting." << std::endl;
+            fclose(file_ptr);
+            exit(0);
         }
     }
         

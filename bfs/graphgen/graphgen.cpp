@@ -14,7 +14,7 @@ int main(int argc, char* const* argv) {
     std::string f_path;
     int option, tmp;
     bool in_fn = false;
-    while((option = getopt(argc, argv, "s:e:f:")) != -1) {
+    while((option = getopt(argc, argv, "s:e:f:t:y:")) != -1) {
         switch (option)
         {
         case 's':
@@ -28,6 +28,14 @@ int main(int argc, char* const* argv) {
         case 'f':
             f_path = optarg;
             in_fn = true;
+            break;
+        case 't':
+            tmp = atoi(optarg);
+            s1 = tmp > 0 ? tmp : s1;
+            break;
+        case 'y':
+            tmp = atoi(optarg);
+            s2 = tmp > 0 ? tmp : s1;
             break;
         default:
             std::cout << "Unrecognized argument: " << option << std::endl;
