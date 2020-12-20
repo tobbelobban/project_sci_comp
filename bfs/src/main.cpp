@@ -7,7 +7,7 @@
 
 int main(int argc, char *const *argv) {
 
-    int32_t root = 0, chunk_size=8, sigma=1,SCALE=-1,EDGEFACTOR=-1;
+    int32_t root = 0, chunk_size=8, sigma=1,SCALE=-1,EDGEFACTOR=-1, mode=1;
     std::string file_path = "none";
     if(argc < 2) {
         std::cout << "Error. Need filename with graph." << std::endl;
@@ -16,7 +16,7 @@ int main(int argc, char *const *argv) {
 
     // parse arguments
     int opt;
-    while ((opt = getopt(argc,argv,":C:s:S:E:r:f:")) != -1)
+    while ((opt = getopt(argc,argv,":C:s:S:E:r:f:m:")) != -1)
     {
         switch (opt)
         {
@@ -37,6 +37,9 @@ int main(int argc, char *const *argv) {
                 break;
             case 'r':
                 root = std::atoi(optarg);
+                break;
+            case 'm':
+                mode = std::atoi(optarg);
                 break;
             default:
                 std::cout << "Unrecognized flag: " << opt << "\nTerminating!" << std::endl;
@@ -70,39 +73,62 @@ int main(int argc, char *const *argv) {
         std::cout << "ERROR! file path containing edges must be specified! Use: -f path/to/file/" << std::endl; 
         exit(0);
     }
+    if(mode < 1 || mode > 3) {
+        std::cout << "ERROR! Mode must be one of the following:\n" << std::endl;
+        std::cout << "mode = 1: CSR only.\n" << std::endl;
+        std::cout << "mode = 2: SELL-C-Sigma only.\n" << std::endl;
+        std::cout << "mode = 3: CSR and SELL-C-Sigma.\n" << std::endl;
+        std::cout << "supply mode with flag m: -m <mode> \n" << std::endl;
+        exit(0);
+    }
 
-    // csr_graph csr_g;
-    // // time = omp_get_wtime();
-    // read_csr_graph_from_file(file_path, csr_g);
-    // // time = omp_get_wtime() - time;
-    // // std::cout << "CSR read time: " << time << " s" << std::endl;
-    // // //print_csr_graph(csr_g);
-    // // time = omp_get_wtime();
-    // auto csr_res = csr_bfs(csr_g, root);
-    // // time = omp_get_wtime() - time;
-    // // std::cout << "CSR solve time: " << time << " s" << std::endl;
-    // //print_vector(csr_res);
-    // delete_csr(csr_g);
+    // timer indices (for SELL-C-SIGMA) have following defintions:
+        // timer[0] = time to read graph to buffer
+        // timer[1] = time to process edges in buffer
+        // timer[2] = time to sort edges
+        // timer[3] = time to create SELL-C-SIGMA datastructure
 
-    // std::cout << std::endl;
+    double CSR_timer[5], SELLCS_timer[5];
+    std::vector<int32_t> CSR_res, SELLCS_res;
+    if(mode & 1) 
+    {
+        csr_graph csr_g;
+        read_csr_graph_from_file(file_path, csr_g, SCALE, EDGEFACTOR);
+        CSR_res = csr_bfs(csr_g, root);
+        delete_csr(csr_g);
+    }
 
+    // BFS with SELL-C-SIGMA datastructure
+    if(mode & 2) 
+    {
+        sellcs sellcs_g;
+        sellcs_g.C = chunk_size;
+        sellcs_g.sigma = pow(2,sigma);
+        read_sellcs_graph_from_file(file_path, sellcs_g, SCALE, EDGEFACTOR, SELLCS_timer);
+        SELLCS_res = sellcs_bfs(sellcs_g, root);
+        permutate_solution(SELLCS_res, sellcs_g);
+        delete_sellcs(sellcs_g);
 
-    sellcs sellcs_g;
-    sellcs_g.C = chunk_size;
-    sellcs_g.sigma = pow(2,sigma);
+        // print times with SELL-C-SIGMA   
+        std::cout << "--SELL-C-SIGMA--" << std::endl;
+        std::cout <<  "Buffer read time: \t\t" << SELLCS_timer[0] << " s"  << std::endl;
+        std::cout << "Process edges time: \t\t" << SELLCS_timer[1] << " s"  << std::endl;
+        std::cout << "Sort vertices time: \t\t" << SELLCS_timer[2] << " s"  << std::endl;
+        std::cout << "Create SELL-C-SIGMA time: \t" << SELLCS_timer[3] << " s"  << std::endl;
+    }
 
-    read_sellcs_graph_from_file(file_path, sellcs_g, SCALE, EDGEFACTOR);
-    //print_sellcs_graph(sellcs_g);
-    auto res = sellcs_bfs(sellcs_g, root);
-    // permutate_solution(res, sellcs_g);
-    // for(auto i = 0; i < sellcs_g.nverts; ++i) {
-    //     if (res[i] != pow(2,SCALE)) {
-    //         std::cout << i << " " << res[i]<< std::endl;
-    //     }
-    // }
-    //print_vector(res);
-    delete_sellcs(sellcs_g);
-
+    if((mode & 1) && (mode & 2))
+    {
+        int32_t nverts = pow(2,SCALE), same=1;
+        for(int i = 0; i < nverts; ++i)
+        {
+            if(CSR_res[i] != SELLCS_res[i]) 
+            {
+                std::cout << "Different solutions! " << CSR_res[i] << " != " << SELLCS_res[i] << std::endl;
+                same = 0;
+            }
+        }
+        std::cout << "Solutions are " << (same ? "the same!" : "not the same!") << std::endl;
+    }
     return 0;
-
 }

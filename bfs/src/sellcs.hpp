@@ -38,7 +38,7 @@ std::vector<int32_t> sellcs_bfs(const sellcs&, const int32_t);
 void permutate_solution(std::vector<int32_t>&, const sellcs&);
 
 // misc
-    void read_sellcs_graph_from_file(const std::string&, sellcs&, int, int);
+    void read_sellcs_graph_from_file(const std::string&, sellcs&, int, int, double* const);
     void print_sellcs_graph(const sellcs&);
     void delete_sellcs(sellcs&);
 

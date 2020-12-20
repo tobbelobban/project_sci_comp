@@ -21,6 +21,7 @@ double cpuSecond() {
 
 void local_sort(std::vector<vertex> &v, const sellcs &g) {
     std::vector<vertex> tmp(v);
+    #pragma omp parallel for 
     for(int32_t i = 0; i < g.nverts/g.sigma; ++i) 
     {
         int32_t start = i*g.sigma;
@@ -73,18 +74,15 @@ void sorter(std::vector<vertex>& tmp, int32_t start, int32_t end, std::vector<ve
     }
 }
 
-void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g, int32_t SCALE, int32_t EDGEFACTOR) {
+void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g, int32_t SCALE, int32_t EDGEFACTOR, double* const timer) {
     
-    // assuming that the edges are sorted in row-major order in file, 32-bit vertex ids
+    // assuming that the edges are stored in row-major order in file, 32-bit vertex ids
     auto bottom_dir = file_path.find_last_of('/')+1;
     std::string dir = file_path.substr(0,bottom_dir);
     
     // set number of vertices and edges
     const int32_t nverts = (int32_t) pow(2,SCALE);
     const int32_t nedges = EDGEFACTOR * nverts;
-
-    // queue for maintaining edges for each vertex
-    std::vector<std::queue<int32_t>> edges(nverts, std::queue<int32_t>());
     
     // vector for counting degree of each vertex
     std::vector<vertex> vertex_degs(nverts, vertex());
@@ -112,12 +110,13 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g,
     }
 
     // prepare for reading edges
-    int32_t *edge_buffer = new int32_t[nedges*2];
-    int32_t prev_min = 0, prev_max = 0, min, max;
-    int64_t e_count = 0;
-    
+    int32_t* edge_buffer = new int32_t[nedges*2];
+    bool* valid_edges = new bool[nedges];
+
     // read edges to buffer
+    timer[0]  = cpuSecond();
     auto read_res = fread(edge_buffer, 2*sizeof(int32_t), nedges, file_ptr);
+    timer[0] = cpuSecond() - timer[0];
     fclose(file_ptr);
     if(read_res != (size_t)nedges) 
     {
@@ -126,66 +125,103 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g,
     }
 
     // process edges
+    timer[1] = cpuSecond();
+    int32_t prev_min = 0, prev_max = 0, min, max;
+    int64_t e_count = 0;
     for(int32_t i = 0; i < nedges; ++i) {
         min = edge_buffer[i*2];
         max = edge_buffer[i*2+1];
-        //std::cout << min << " " << max << std::endl;
-        if(min == max) continue; // skip self-loops
+        if(min == max) 
+        {
+            valid_edges[i] = false;
+            continue; // skip self-loops
+        }
         if(min > max) {
             min = max;
             max = edge_buffer[i*2];
         } 
-        if(min == prev_min && max == prev_max) continue; // skip duplicate edges
-        edges[min].push(max);
-        edges[max].push(min);
+        if(min == prev_min && max == prev_max) 
+        {
+            valid_edges[i] = false;
+            continue; // skip duplicate edges
+        }
+        valid_edges[i] = true;
         ++vertex_degs[min].degree;
         ++vertex_degs[max].degree;
         e_count += 2;
         prev_min = min;
         prev_max = max;
     }
-    delete edge_buffer;
+    timer[1] = cpuSecond() - timer[1];
     
-    // sort vertices  
+    // sort vertices based on degree (descending order)
+    timer[2] = cpuSecond(); 
     local_sort(vertex_degs, sellcs_g);
-    
+    timer[2] = cpuSecond() - timer[2];
+
     // store the permuted vertex mapping: permuts(original order) --> permuted order
     for(int32_t vid = 0; vid < nverts; ++vid) sellcs_g.permuts[vertex_degs[vid].vid] = vid;
     
-    // compute the chunk lengths and sizes
-    int32_t size = 0;
+    // compute the chunk lengths and size
+    int32_t size = 0, offset=0, v;
+    int32_t* edge_offsets = new int32_t[nverts];
     for(int32_t c = 0; c < num_chunks; ++c)
     {
         int32_t maxlen = -1;
         for(int32_t r = 0; r < sellcs_g.C; ++r)
         {
-            int32_t currlen = vertex_degs[c*sellcs_g.C+r].degree;
+            // get current vertex and its degree
+            v = c*sellcs_g.C+r;
+            int32_t currlen = vertex_degs[v].degree;
+            edge_offsets[v] = offset;
+            offset += currlen;
             if(currlen > maxlen) maxlen = currlen;
         }
+        // set chunk length and size
         sellcs_g.cl[c] = maxlen;
         sellcs_g.cs[c] = size;
         size += maxlen*sellcs_g.C;
     }
-    
-    // initialze edge array
+
+    // store all valid edges in row-major order for permutated order
+    int32_t* edges = new int32_t[e_count];
+    for(int32_t e = 0; e < nedges; ++e)
+    {
+        if(!valid_edges[e]) continue;
+        int32_t v1 = sellcs_g.permuts[edge_buffer[e*2]];
+        int32_t v2 = sellcs_g.permuts[edge_buffer[e*2+1]];
+        edges[edge_offsets[v1]++] = v2;
+        edges[edge_offsets[v2]++] = v1;
+    }
+    delete edge_buffer;
+    delete valid_edges;
+
+    // initialze SELL-C-Sigma col-array
     sellcs_g.cols = new int32_t[size];
     sellcs_g.beta = (double)e_count / (double)size;
-    std::cout << edges[0].size() << std::endl;
+    
     // store edges
-    int32_t vid;
+    int32_t remaining;
+    timer[3] = cpuSecond();
     for(int32_t c = 0; c < num_chunks; ++c) {
         for(int32_t l = 0; l < sellcs_g.cl[c]; ++l) {
             for(int32_t r = 0; r < sellcs_g.C; ++r) {
-                vid = vertex_degs[c*sellcs_g.C+r].vid;
-                if(edges[vid].empty()) {
-                    sellcs_g.cols[sellcs_g.cs[c]+l*sellcs_g.C+r] = -1;    
+                v = c*sellcs_g.C+r;  
+                remaining = vertex_degs[v].degree;
+                offset = sellcs_g.cs[c]+l*sellcs_g.C+r;
+                // if current vertex has no more edges, insert -1
+                if(remaining == 0) {
+                    sellcs_g.cols[offset] = -1;    
                 } else {
-                    sellcs_g.cols[sellcs_g.cs[c]+l*sellcs_g.C+r] = sellcs_g.permuts[edges[vid].front()];
-                    edges[vid].pop();
+                    sellcs_g.cols[offset] = edges[edge_offsets[v]-remaining];
+                    --vertex_degs[c*sellcs_g.C+r].degree;
                 }
             } 
         }
     }
+    timer[3] = cpuSecond() - timer[3];
+    delete edges;
+    delete edge_offsets;
 }
 
 void tropical_sellcs_mv_mult_w8(std::vector<int32_t>& y, const sellcs& g, const std::vector<int32_t>& x) {

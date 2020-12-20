@@ -9,11 +9,19 @@
 #include <immintrin.h>
 #include "csr.hpp"
 
-void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g) {
+void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g, int32_t SCALE, int32_t EDGEFACTOR) {
+
     // assuming that the edges are sorted in file, 32-bit vert ids
     auto bottom_dir = file_path.find_last_of('/')+1;
     std::string dir = file_path.substr(0,bottom_dir);
-    const char* file = file_path.substr(bottom_dir, file_path.length()).c_str();
+
+    // set number of vertices and edges
+    const int32_t nverts = (int32_t) pow(2,SCALE);
+    const int32_t nedges = EDGEFACTOR * nverts;
+
+    // queue for maintaining edges 
+    std::vector<std::queue<int32_t>> edges(nverts,std::queue<int32_t>());
+    
     // attempt to open file
     FILE *file_ptr;
     file_ptr = fopen(file_path.c_str(), "rb");
@@ -22,28 +30,27 @@ void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g) {
         exit(0);
     }
 
-    //read SCALE and EDGEFACTOR
-    // file_path must be of format "path/to/file/SCALE_EDGEFACTOR_blablabla"
-    errno = 0;
-    char * end;
-    const int32_t nverts = (int32_t) pow(2,strtol(file, &end, 10));
-    end++;
-    const int32_t nedges = strtol(end, &end, 10) * nverts;
-    if(errno == ERANGE) {
-        printf("Range error occured while extracting scale and edge factor\n");
+    // buffer to read into
+    int32_t *edge_buffer = new int32_t[nedges*2];
+    
+    // read edges to buffer
+    auto read_res = fread(edge_buffer, 2*sizeof(int32_t), nedges, file_ptr);
+    fclose(file_ptr);
+    if(read_res != (size_t)nedges) 
+    {
+        std::cout << "Error reading edges from file... exiting!" << std::endl;
         exit(0);
     }
-    std::vector<std::queue<int32_t>> edges(nverts,std::queue<int32_t>());
-    int32_t edge_buffer[2];
+
+    // process edges
     int32_t prev_min = 0, prev_max = 0, min, max, count = 0;
     for(int32_t i = 0; i < nedges; ++i) {
-        fread(edge_buffer, sizeof(int32_t), 2, file_ptr);
-        min = edge_buffer[0];
-        max = edge_buffer[1];
+        min = edge_buffer[i*2];
+        max = edge_buffer[i*2+1];
         if(min == max) continue; // skip self-loops
         if(min > max) {
             min = max;
-            max = edge_buffer[0];
+            max = edge_buffer[i*2];
         } 
         if(min == prev_min && max == prev_max) continue; // skip duplicates
         edges[min].push(max);
@@ -52,11 +59,15 @@ void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g) {
         prev_min = min;
         prev_max = max;
     }
-    fclose(file_ptr);
+    delete edge_buffer;
+
+    // CSR members
     csr_g.cols = new int32_t[count];
     csr_g.rows = new int32_t[nverts+1];
     csr_g.nverts = nverts;
     csr_g.nedges = count;
+
+    // set edges
     count = 0;
     for(int32_t v = 0; v < nverts; ++v) {
         csr_g.rows[v] = count;
