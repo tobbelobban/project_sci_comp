@@ -5,7 +5,7 @@ CCPP = g++
 LOCAL_HEADERS = *.hpp
 LOCAL_SOURCES = *.cpp
 
-CPPFLAGS = -fopenmp -std=c++11 -g -Wall -march=native -mavx
+CPPFLAGS = -fopenmp -std=c++11 -g -Wall -march=native
 
 all: $(LOCAL_HEADERS) $(LOCAL_SOURCES)
 	$(CCPP) -o bfs.out $(CPPFLAGS) $(LOCAL_SOURCES)

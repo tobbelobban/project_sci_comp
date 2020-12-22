@@ -107,7 +107,8 @@ int main(int argc, char *const *argv) {
         std::flush(std::cout);
 
         read_csr_graph_from_file(file_path, csr_g, SCALE, EDGEFACTOR, CSR_timer);
-        
+        //print_csr_graph(csr_g);
+
         std::cout << " done!" << std::endl;
         std::cout <<  "Buffer read time: \t\t" << CSR_timer[0] << " s"  << std::endl;
         std::cout << "Process buffer time: \t\t" << CSR_timer[1] << " s"  << std::endl;
@@ -117,7 +118,7 @@ int main(int argc, char *const *argv) {
         std::cout << "Computing BFS with CSR, please wait...";
         std::flush(std::cout);
 
-        CSR_res = csr_bfs_iin(csr_g, root, CSR_timer);
+        CSR_res = csr_bfs(csr_g, root, CSR_timer);
         
         std::cout << " done!" << std::endl;
         std::cout << "Number of iterations: \t\t" << (int)CSR_timer[1] << std::endl;
@@ -141,12 +142,14 @@ int main(int argc, char *const *argv) {
         std::flush(std::cout);
 
         read_sellcs_graph_from_file(file_path, sellcs_g, SCALE, EDGEFACTOR, SELLCS_timer);
-        
+        //print_sellcs_graph(sellcs_g);
+
         std::cout << " done!" << std::endl;
         std::cout <<  "Buffer read time: \t\t" << SELLCS_timer[0] << " s"  << std::endl;
         std::cout << "Process buffer time: \t\t" << SELLCS_timer[1] << " s"  << std::endl;
         std::cout << "Sort vertices time: \t\t" << SELLCS_timer[2] << " s"  << std::endl;
         std::cout << "Create SELL-C-SIGMA time: \t" << SELLCS_timer[3] << " s"  << std::endl;
+        std::cout << "Beta = \t\t\t\t" << sellcs_g.beta << std::endl;
         std::cout << std::endl;
         
         std::cout << "Computing BFS with SELL-C-SIGMA, please wait...";

@@ -20,7 +20,7 @@ void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g, in
     const int32_t nedges = EDGEFACTOR * nverts;
 
     // queue for maintaining edges 
-    std::vector<std::queue<int32_t>> edges(nverts,std::queue<int32_t>());
+    //std::vector<std::queue<int32_t>> edges(nverts,std::queue<int32_t>());
     
     // attempt to open file
     FILE *file_ptr;
@@ -31,8 +31,10 @@ void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g, in
     }
 
     // buffer to read into
-    int32_t *edge_buffer = new int32_t[nedges*2];
-    
+    int32_t* edge_buffer = new int32_t[nedges*2];
+    int32_t* degrees = new int32_t[nverts];
+    memset((void*)degrees, 0, sizeof(int32_t)*nverts);
+
     // read edges to buffer
     timer[0] = cpuSecond();
     auto read_res = fread(edge_buffer, 2*sizeof(int32_t), nedges, file_ptr);
@@ -46,54 +48,73 @@ void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g, in
 
     // process edges
     timer[1] = cpuSecond();
-    int32_t prev_min = 0, prev_max = 0, min, max, count = 0;
-    for(int32_t i = 0; i < nedges; ++i) {
-        min = edge_buffer[i*2];
-        max = edge_buffer[i*2+1];
-        if(min == max) continue; // skip self-loops
-        if(min > max) {
+    int32_t prev_min = 0, prev_max = 0, min, max, e_count = 0;
+    for(int32_t e = 0; e < nedges; ++e) {
+        min = edge_buffer[e*2];
+        max = edge_buffer[e*2+1];
+        
+        if(min > max)
+        {
             min = max;
-            max = edge_buffer[i*2];
-        } 
-        if(min == prev_min && max == prev_max) continue; // skip duplicates
-        edges[min].push(max);
-        edges[max].push(min);
-        count += 2;
+            max = edge_buffer[e*2];
+        }
+
+        // skip self-loops and duplicate edges
+        if(min == max || (min == prev_min && max == prev_max)) 
+        {
+            edge_buffer[e*2] = -1; // if this edge is not valid, -1 will tell us so later    
+            continue; 
+        }
+
+        ++degrees[min];
+        ++degrees[max];
+        e_count += 2;
         prev_min = min;
         prev_max = max;
     }
     timer[1] = cpuSecond() - timer[1];
-    delete edge_buffer;
-
+    
     // CSR members
-    csr_g.cols = new int32_t[count];
+    csr_g.cols = new int32_t[e_count];
     csr_g.rows = new int32_t[nverts+1];
     csr_g.nverts = nverts;
-    csr_g.nedges = count;
+    csr_g.nedges = e_count;
+    
+    int32_t* offsets = new int32_t[nverts];
+    int32_t offset = 0;
+    for(int32_t v = 0; v < nverts; ++v)
+    {
+        offsets[v] = offset;
+        csr_g.rows[v] = offset;
+        offset += degrees[v];
+    }
+    csr_g.rows[nverts] = offset;
 
     // set edges in CSR
-    count = 0;
     timer[2] = cpuSecond();
-    for(int32_t v = 0; v < nverts; ++v) {
-        csr_g.rows[v] = count;
-        while(!edges[v].empty()) {
-            csr_g.cols[count++] = edges[v].front();
-            edges[v].pop();
-        }
+    int32_t v1,v2;
+    for(int32_t e = 0; e < nedges; ++e) {
+        v1 = edge_buffer[e*2];
+        if(v1 == -1) continue;
+        v2 = edge_buffer[2*e+1];
+        csr_g.cols[offsets[v1]++] = v2;
+        csr_g.cols[offsets[v2]++] = v1;
     }
     timer[2] = cpuSecond() - timer[2];
-    csr_g.rows[nverts] = count;
+    
+    delete[] edge_buffer;
+    delete[] offsets;
 }
 
 void delete_csr(csr_graph& csr_g) {
-    delete csr_g.cols;
-    delete csr_g.rows;
+    delete[] csr_g.cols;
+    delete[] csr_g.rows;
 }
 
 void print_csr_graph(const csr_graph& csr_g) {
     for(int32_t from = 0; from < csr_g.nverts; ++from) {
         for(int32_t to = csr_g.rows[from]; to < csr_g.rows[from+1]; ++to) {
-            std::cout << csr_g.cols[to] << " ";
+            std::cout << csr_g.cols[to] << "\t";
         }
         std::cout << std::endl;
     }
@@ -107,40 +128,40 @@ bool same(const std::vector<int32_t>& d1, const std::vector<int32_t>& d2) {
     return true;
 }
 
-void tropical_iin_csr_mv_mult(std::vector<int32_t>& y, const csr_graph& csr_g, const std::vector<int32_t>& x) {
-    for(int32_t i = 0; i < csr_g.nverts; ++i) {
-        int64_t j;
-        __m256i tmps = _mm256_set_epi32(csr_g.nverts,csr_g.nverts,csr_g.nverts,csr_g.nverts,csr_g.nverts,csr_g.nverts,csr_g.nverts,csr_g.nverts);
-        __m256i xs;
-        for(j = csr_g.rows[i]; j < (int64_t)csr_g.rows[i+1]-7; j+=8) {
-            xs = _mm256_set_epi32(1+x[csr_g.cols[j+0]], 1+x[csr_g.cols[j+1]], 1+x[csr_g.cols[j+2]], 1+x[csr_g.cols[j+3]],1+x[csr_g.cols[j+4]],1+x[csr_g.cols[j+5]],1+x[csr_g.cols[j+6]],1+x[csr_g.cols[j+7]]);
-            tmps = _mm256_min_epu32(xs,tmps);
-        }
+// void tropical_iin_csr_mv_mult(std::vector<int32_t>& y, const csr_graph& csr_g, const std::vector<int32_t>& x) {
+//     for(int32_t i = 0; i < csr_g.nverts; ++i) {
+//         int64_t j;
+//         __m256i tmps = _mm256_set_epi32(csr_g.nverts,csr_g.nverts,csr_g.nverts,csr_g.nverts,csr_g.nverts,csr_g.nverts,csr_g.nverts,csr_g.nverts);
+//         __m256i xs;
+//         for(j = csr_g.rows[i]; j < (int64_t)csr_g.rows[i+1]-7; j+=8) {
+//             xs = _mm256_set_epi32(1+x[csr_g.cols[j+0]], 1+x[csr_g.cols[j+1]], 1+x[csr_g.cols[j+2]], 1+x[csr_g.cols[j+3]],1+x[csr_g.cols[j+4]],1+x[csr_g.cols[j+5]],1+x[csr_g.cols[j+6]],1+x[csr_g.cols[j+7]]);
+//             tmps = _mm256_min_epu32(xs,tmps);
+//         }
         
-        y[i] = std::min( y[i], (int32_t)std::min(
-                    (int32_t)std::min(
-                    std::min(
-                        _mm256_extract_epi32(tmps,0),
-                        _mm256_extract_epi32(tmps,1)
-                    ),
-                    std::min(
-                        _mm256_extract_epi32(tmps,2),
-                        _mm256_extract_epi32(tmps,3)
-                    )),
-                    (int32_t)std::min(
-                    std::min(
-                        _mm256_extract_epi32(tmps,4),
-                        _mm256_extract_epi32(tmps,5)
-                    ),
-                    std::min(
-                        _mm256_extract_epi32(tmps,6),
-                        _mm256_extract_epi32(tmps,7)
-                    ))));
-        for(; j < csr_g.rows[i+1]; ++j) {  // clean up last part of loop
-            y[i] = std::min(y[i], 1+x[csr_g.cols[j]]);
-        }
-    }
-}
+//         y[i] = std::min( y[i], (int32_t)std::min(
+//                     (int32_t)std::min(
+//                     std::min(
+//                         _mm256_extract_epi32(tmps,0),
+//                         _mm256_extract_epi32(tmps,1)
+//                     ),
+//                     std::min(
+//                         _mm256_extract_epi32(tmps,2),
+//                         _mm256_extract_epi32(tmps,3)
+//                     )),
+//                     (int32_t)std::min(
+//                     std::min(
+//                         _mm256_extract_epi32(tmps,4),
+//                         _mm256_extract_epi32(tmps,5)
+//                     ),
+//                     std::min(
+//                         _mm256_extract_epi32(tmps,6),
+//                         _mm256_extract_epi32(tmps,7)
+//                     ))));
+//         for(; j < csr_g.rows[i+1]; ++j) {  // clean up last part of loop
+//             y[i] = std::min(y[i], 1+x[csr_g.cols[j]]);
+//         }
+//     }
+// }
 
 void tropical_csr_mv_mult(std::vector<int32_t>& y, const csr_graph& csr_g, const std::vector<int32_t>& x) {
     for(int32_t i = 0; i < csr_g.nverts; ++i) {
@@ -150,22 +171,22 @@ void tropical_csr_mv_mult(std::vector<int32_t>& y, const csr_graph& csr_g, const
     }
 }
 
-std::vector<int32_t> csr_bfs_iin(const csr_graph& csr_g, const int32_t r, double* const timer) {
-    std::vector<int32_t> dists(csr_g.nverts, csr_g.nverts);
-    if(r >= csr_g.nverts) return dists;
-    dists[r] = 0;
-    std::vector<int32_t> prev_dists(csr_g.nverts,0);
-    int32_t its = 0;
-    timer[0] = cpuSecond();
-    while(!same(dists,prev_dists)) {
-        prev_dists = dists;
-        tropical_iin_csr_mv_mult(dists, csr_g, prev_dists);
-        ++its;
-    }
-    timer[0] = cpuSecond() - timer[0];
-    timer[1] = its;
-    return dists;
-}
+// std::vector<int32_t> csr_bfs_iin(const csr_graph& csr_g, const int32_t r, double* const timer) {
+//     std::vector<int32_t> dists(csr_g.nverts, csr_g.nverts);
+//     if(r >= csr_g.nverts) return dists;
+//     dists[r] = 0;
+//     std::vector<int32_t> prev_dists(csr_g.nverts,0);
+//     int32_t its = 0;
+//     timer[0] = cpuSecond();
+//     while(!same(dists,prev_dists)) {
+//         prev_dists = dists;
+//         tropical_iin_csr_mv_mult(dists, csr_g, prev_dists);
+//         ++its;
+//     }
+//     timer[0] = cpuSecond() - timer[0];
+//     timer[1] = its;
+//     return dists;
+// }
 
 std::vector<int32_t> csr_bfs(const csr_graph& csr_g, const int32_t r, double* const timer) {
     std::vector<int32_t> dists(csr_g.nverts, csr_g.nverts);
