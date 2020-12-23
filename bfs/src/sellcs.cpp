@@ -243,48 +243,44 @@ void tropical_sellcs_mv_mult_w8(std::vector<int32_t>& y, const sellcs& g, const 
     }
 }
 
-// void tropical_sellcs_mv_mult_w4(std::vector<int32_t>& y, const sellcs& g, const std::vector<int32_t>& x) {
-//     __m128i ones = _mm_set_epi32(1,1,1,1), m_ones = _mm_set_epi32(-1,-1,-1,-1), infs = _mm_set_epi32(g.nverts, g.nverts, g.nverts, g.nverts);
-//     __m128i tmps, col, vals, rhs;
-//     int32_t c_offs;
-//     for(int32_t i = 0; i < g.n_chunks; ++i) {
-//         tmps = _mm_load_si128((__m128i*)&x[i*g.C]); // load chunk from frontier (x)
-//         c_offs = g.cs[i];
-//         for(int32_t j = 0; j < g.cl[i]; ++j) {
-//             col = _mm_load_si128((__m128i*)&g.cols[c_offs]);
-//             vals = _mm_cmpeq_epi32(m_ones,col);
-//             vals = _mm_blendv_epi8(ones,infs,vals);
-//             rhs = _mm_set_epi32(x[g.cols[c_offs+3]], x[g.cols[c_offs+2]], x[g.cols[c_offs+1]], x[g.cols[c_offs+0]]);
-//             tmps = _mm_min_epi32(_mm_add_epi32(rhs,vals),tmps);
-//             c_offs += g.C;
-//         }
-//         _mm_store_si128((__m128i*)&y[i*g.C], tmps);
-//     }
-// }
+void tropical_sellcs_mv_mult_w4(std::vector<int32_t>& y, const sellcs& g, const std::vector<int32_t>& x) {
+    __m128i ones = _mm_set1_epi32(1), m_ones = _mm_set1_epi32(-1), infs = _mm_set1_epi32(g.nverts);
+    #pragma omp parallel for
+    for(int32_t i = 0; i < g.n_chunks; ++i) {
+        __m128i tmps, col, vals, rhs;
+        int32_t c_offs;
+        tmps = _mm_loadu_si128((__m128i*)&x[i*g.C]); // load chunk from frontier (x)
+        c_offs = g.cs[i];
+        for(int32_t j = 0; j < g.cl[i]; ++j) {
+            col = _mm_loadu_si128((__m128i*)&g.cols[c_offs]);
+            vals = _mm_cmpeq_epi32(m_ones,col);
+            vals = _mm_blendv_epi8(ones,infs,vals);
+            rhs = _mm_set_epi32(x[g.cols[c_offs+3]], x[g.cols[c_offs+2]], x[g.cols[c_offs+1]], x[g.cols[c_offs+0]]);
+            tmps = _mm_min_epi32(_mm_add_epi32(rhs,vals),tmps);
+            c_offs += g.C;
+        }
+        _mm_storeu_si128((__m128i*)&y[i*g.C], tmps);
+    }
+}
 
-std::vector<int32_t> sellcs_bfs(const sellcs& g, const int32_t r, double* const timer) {
-    std::vector<int32_t> dists(g.nverts, g.nverts);
-    if(r >= g.nverts || r < 0) return dists;
-    dists[get_permutated_vid(r, g)] = 0;
+int32_t sellcs_bfs(const sellcs& g, const int32_t r, std::vector<int32_t>& res) {
+    if(r >= g.nverts || r < 0) return -1;
     std::vector<int32_t> prev_dists(g.nverts,0);
     int32_t its = 0;
-    timer[0] = cpuSecond();
     if(g.C == 8) {
-        while(!same(dists,prev_dists)) {
-            prev_dists = dists;
-            tropical_sellcs_mv_mult_w8(dists, g, prev_dists);
+        while(!same(res,prev_dists)) {
+            prev_dists = res;
+            tropical_sellcs_mv_mult_w8(res, g, prev_dists);
             ++its;
         }
     } else {
-        while(!same(dists,prev_dists)) {
-            prev_dists = dists;
-            //tropical_sellcs_mv_mult_w4(dists, g, prev_dists);
+        while(!same(res,prev_dists)) {
+            prev_dists = res;
+            tropical_sellcs_mv_mult_w4(res, g, prev_dists);
             ++its;
         }
     }
-    timer[0] = cpuSecond() - timer[0];
-    timer[1] = its;
-    return dists;
+    return its;
 }
 
 void print_sellcs_graph(const sellcs& sellcs_g) {
@@ -298,10 +294,10 @@ void print_sellcs_graph(const sellcs& sellcs_g) {
     }
 }
 
-void permutate_solution(std::vector<int32_t>& solv, const sellcs& g) {
-    std::vector<int32_t> solv_cp(solv);
+void permutate_solution(std::vector<int32_t>& solution, const sellcs& g) {
+    std::vector<int32_t> solv_cp(solution);
     for(int32_t oldp_v = 0; oldp_v < g.nverts; ++oldp_v) {
-        solv[oldp_v] = solv_cp[g.permuts[oldp_v]];
+        solution[oldp_v] = solv_cp[g.permuts[oldp_v]];
     }
 }
 
