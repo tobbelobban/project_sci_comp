@@ -20,9 +20,9 @@ void calc_statistics(double* stats, const double* times, int size) {
 	double mean = temp;
     temp = 0;
 
-    // compte the standard deviation
+    // compute the standard deviation
 	for (i = 0; i < size; ++i) temp += (times[i] - mean) * (times[i] - mean);
-	temp /= size - 1;
+	temp /= (size > 1 ? size - 1 : 1);
 	stats[2] = sqrt(temp);
 }
 
@@ -153,7 +153,7 @@ int main(int argc, char *const *argv) {
     if(mode & 1) 
     {    
         // timing for reading graph
-        std::cout << "-- CSR --\n" << std::endl;
+        std::cout << "-- CSR --" << std::endl;
         std::cout << "Creating CSR from file, please wait...";
         std::flush(std::cout);
 
@@ -176,7 +176,7 @@ int main(int argc, char *const *argv) {
         sellcs_g.sigma = pow(2,sigma);
 
         // timing for reading graph
-        std::cout << "-- SELL-C-SIGMA --\n" << std::endl;
+        std::cout << "-- SELL-C-SIGMA --" << std::endl;
         std::cout << "Creating SELL-C-SIGMA from file, please wait...";
         std::flush(std::cout);
 
@@ -192,6 +192,7 @@ int main(int argc, char *const *argv) {
         std::cout << "Sort vertices time: \t\t" << SELLCS_create_timer[2] << " s"  << std::endl;
         std::cout << "Create SELL-C-SIGMA time: \t" << SELLCS_create_timer[3] << " s"  << std::endl;
         std::cout << "Beta = \t\t\t\t" << sellcs_g.beta << std::endl;
+        std::cout << "Chunk width = \t\t\t" << sellcs_g.C << std::endl;
         std::cout << std::endl;
     }
 
@@ -211,7 +212,7 @@ int main(int argc, char *const *argv) {
             // warm up
             res_CSR = std::vector<int32_t>(csr_g.nverts,csr_g.nverts);
             res_CSR[curr_root] = 0;
-            tmp = csr_bfs(csr_g, curr_root, res_CSR);
+            csr_bfs(csr_g, curr_root, res_CSR);
 
             // now compute with timing
             res_CSR = std::vector<int32_t>(csr_g.nverts,csr_g.nverts);
@@ -235,13 +236,14 @@ int main(int argc, char *const *argv) {
             int32_t permutated_root = get_permutated_vid(curr_root, sellcs_g);
             res_SELLCS = std::vector<int32_t>(nverts,nverts);
             res_SELLCS[permutated_root] = 0;
-            tmp = sellcs_bfs(sellcs_g, permutated_root, res_SELLCS);
+            sellcs_bfs(sellcs_g, permutated_root, res_SELLCS);
 
             // compute with timing
+            res_SELLCS = std::vector<int32_t>(nverts,nverts);
+            res_SELLCS[permutated_root] = 0;
             SELLCS_compute_timer[i] = cpuSecond();
             tmp = sellcs_bfs(sellcs_g, permutated_root, res_SELLCS);
             SELLCS_compute_timer[i] = cpuSecond() - SELLCS_compute_timer[i];
-            
             SELLCS_permutate_timer[i] = cpuSecond();
             permutate_solution(res_SELLCS, sellcs_g);
             SELLCS_permutate_timer[i] = cpuSecond() - SELLCS_permutate_timer[i];
@@ -288,12 +290,17 @@ int main(int argc, char *const *argv) {
         std::cout << "Mean time per matrix-vector mult. \t= " << stats[0]/(double)SELLCS_its << " s" << std::endl;
         std::cout << "Mean BFS-SELLCS time \t\t\t= " << stats[1] << " s" << std::endl;
         std::cout << "Std. deviation BFS-SELLCS \t\t= " << stats[2] << " s" << std::endl;
+        
+        calc_statistics(stats, SELLCS_permutate_timer, root);
+
+        std::cout << "Mean permutate time \t\t\t= " << stats[1] << " s" << std::endl;
+        std::cout << "Std. deviation permutate time \t\t= " << stats[2] << " s" << std::endl;
         std::cout << std::endl;
     }
     if(mode & 2 && mode & 1)
     {
         std::cout << "-- COMPARISON RESULTS --" << std::endl;
-        std::cout << "BFS compute for " << root << (root > 1 ? " roots." : " root.") << std::endl;
+        std::cout << "BFS compute for " << root << (root == 1 ? " root." : " roots.") << std::endl;
         std::cout << "Number of same results between BFS-CSR and BFS-SELLCS:\t" << same_count << std::endl;
         std::cout << std::endl; 
     }

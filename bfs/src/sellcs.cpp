@@ -153,6 +153,7 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g,
     timer[2] = cpuSecond() - timer[2];
     
     // compute the chunk lengths and size
+    timer[3] = cpuSecond();
     int32_t size=0, offset=0, v=0, currlen;
     int32_t* edge_offsets = new int32_t[nverts];
 
@@ -189,7 +190,7 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g,
         edges[edge_offsets[v2]++] = v1;
     }
     delete[] edge_buffer;
-    
+    //for(int32_t v = 1; v < nverts; ++v) std::sort(&edges[edge_offsets[v]-vertex_degs[v].degree],&edges[edge_offsets[v]]);
     // initialze SELL-C-Sigma col-array
     sellcs_g.cols = new int32_t[size];
     sellcs_g.beta = (double)e_count / (double)size;
@@ -197,7 +198,7 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g,
     // store edges
     int32_t remaining;
     offset = 0;
-    timer[3] = cpuSecond();
+    
     for(int32_t c = 0; c < num_chunks; ++c) 
     {
         for(int32_t l = 0; l < sellcs_g.cl[c]; ++l) 
@@ -296,6 +297,7 @@ void print_sellcs_graph(const sellcs& sellcs_g) {
 
 void permutate_solution(std::vector<int32_t>& solution, const sellcs& g) {
     std::vector<int32_t> solv_cp(solution);
+    //#pragma omp parallel for
     for(int32_t oldp_v = 0; oldp_v < g.nverts; ++oldp_v) {
         solution[oldp_v] = solv_cp[g.permuts[oldp_v]];
     }

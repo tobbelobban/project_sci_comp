@@ -74,7 +74,9 @@ void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g, in
     }
     timer[1] = cpuSecond() - timer[1];
     
-    // CSR members
+    // set edges in CSR
+    timer[2] = cpuSecond();
+    
     csr_g.cols = new int32_t[e_count];
     csr_g.rows = new int32_t[nverts+1];
     csr_g.nverts = nverts;
@@ -90,8 +92,6 @@ void read_csr_graph_from_file(const std::string& file_path, csr_graph& csr_g, in
     }
     csr_g.rows[nverts] = offset;
 
-    // set edges in CSR
-    timer[2] = cpuSecond();
     int32_t v1,v2;
     for(int32_t e = 0; e < nedges; ++e) {
         v1 = edge_buffer[e*2];
