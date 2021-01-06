@@ -3,9 +3,9 @@
 The purpose of this project was to implement algebraic BFS and then exploit SIMD to speed up BFS.
 Currently there are two implementations, one using CRS format, and the other SlimSell. \
 SlimSell uses Intel Intrinsics and requires AVX2 on x86 system. \
- \
+
 ## Graph generation
- \
+
 Graphs are generated to file using Grapg 500 benchmark generator. These graphs are Kronecker power-law graphs. \
 To create a graph, move to graphgen/ and use: \
 1) make includes \
@@ -19,9 +19,9 @@ Flags: \
   -e EDGEFACTOR. Determines average vertex degree where EDGEFACTOR = #edges / #vertices. \
   -f, file. Supply a file name to store the graph in \
   -r, ROOTS. Create a file containing ROOTS number of non-isolated roots to perform BFS with, these are stored in file : ../bin/sSCALE_efEDGEFACTOR_rROOTS.res \
-  \
+ 
  ## BFS
-  \
+
  To compile, move to src/ and use: \
  1) make \
   \
