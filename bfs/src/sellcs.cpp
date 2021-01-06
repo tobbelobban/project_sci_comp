@@ -226,16 +226,16 @@ void read_sellcs_graph_from_file(const std::string& file_path, sellcs& sellcs_g,
 
 void tropical_sellcs_mv_mult_w8(std::vector<int32_t>& y, const sellcs& g, const std::vector<int32_t>& x) {
     __m256i ones = _mm256_set1_epi32(1), m_ones = _mm256_set1_epi32(-1), infs = _mm256_set1_epi32(g.nverts);
-    #pragma omp parallel for
+    //pragma omp parallel for
     for(int32_t i = 0; i < g.n_chunks; ++i) {
         __m256i tmps, col, vals, rhs;
         int32_t c_offs;
-        tmps = _mm256_loadu_si256((__m256i*)&x[i*g.C]); // load chunk from frontier (x)
+        tmps = _mm256_loadu_si256((__m256i*)&x[i*g.C]); // load chunk of x
         c_offs = g.cs[i];
         for(int32_t j = 0; j < g.cl[i]; ++j) {
-            col = _mm256_loadu_si256((__m256i*)&g.cols[c_offs]);
-            vals = _mm256_cmpeq_epi32(m_ones,col);
-            vals = _mm256_blendv_epi8(ones,infs,vals);
+            col = _mm256_loadu_si256((__m256i*)&g.cols[c_offs]); // load column of chunk
+            vals = _mm256_cmpeq_epi32(m_ones,col); // set 0xFFFFFFFF for padded edge (-1), 0 otherwise
+            vals = _mm256_blendv_epi8(ones,infs,vals); // set inf for 1, 1 otherwise
             rhs = _mm256_set_epi32(x[g.cols[c_offs+7]],x[g.cols[c_offs+6]],x[g.cols[c_offs+5]],x[g.cols[c_offs+4]],x[g.cols[c_offs+3]], x[g.cols[c_offs+2]], x[g.cols[c_offs+1]], x[g.cols[c_offs+0]]);
             tmps = _mm256_min_epi32(_mm256_add_epi32(rhs,vals),tmps);
             c_offs += g.C;
