@@ -22,7 +22,7 @@ Flags: \
  
  ## BFS
 
- To compile, move to src/ and use: \
+ To compile, move to src/ and use:
  1) make \
   \
  Hopefully you will see an executable, bfs.out . You may need to modify makefile depending on system. \
