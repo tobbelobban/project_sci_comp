@@ -7,7 +7,7 @@ SlimSell uses Intel Intrinsics and requires AVX2 on x86 system.
 ## Graph generation
 
 Graphs are generated to file using Grapg 500 benchmark generator. These graphs are Kronecker power-law graphs. \
-To create a graph, move to graphgen/ and use:
+To create a graph, move to bfs/graphgen/ and use:
 1) make includes \
 2) make locals \
 3) make all \
