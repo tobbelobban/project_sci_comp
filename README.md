@@ -33,4 +33,4 @@ Flags: \
   -m MODE , mode to run. Mode 1 = CRS only, mode 2 = SlimSell only, mode 3 = CRS and SlimSell \
   -r ROOT , user-specified root to search from. Default root is 0. \
   -R ROOTS -r NUMROOTS, ROOTS is file containing roots, NUMROOTS is maximum number of roots in file ROOTS to peform BFS with. \
-  -s SIGMA , sorting degree for SlimSell. if mode > 1, then use sorting degree. Sorting degree = 2^SIGMA, where 0 <= SIGMA <= SCALE. \
+  -s SIGMA , sorting degree for SlimSell. if mode > 1, then use sorting degree. Sorting degree = 2^SIGMA, where 0 <= SIGMA <= SCALE.
