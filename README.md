@@ -18,7 +18,7 @@ Flags: \
   -s SCALE, graph scale. Determines number of vertices where nverts = 2^SCALE. \
   -e EDGEFACTOR. Determines average vertex degree where EDGEFACTOR = #edges / #vertices. \
   -f, file. Supply a file name to store the graph in \
-  -r, ROOTS. Create a file containing ROOTS number of non-isolated roots to perform BFS with, these are stored in file : ../bin/sSCALE_efEDGEFACTOR_rROOTS.res \
+  -r, ROOTS. Create a file containing ROOTS number of non-isolated roots to perform BFS with, these are stored in file : ../bin/sSCALE_efEDGEFACTOR_rROOTS.res
  
  ## BFS
 
