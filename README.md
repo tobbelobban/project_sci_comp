@@ -22,7 +22,7 @@ Flags: \
  
  ## BFS
 
- To compile, move to src/ and use:
+ To compile, move to bfs/src/ and use:
  1) make \
   \
  Hopefully you will see an executable, bfs.out . You may need to modify makefile depending on system. \
@@ -34,4 +34,3 @@ Flags: \
   -r ROOT , user-specified root to search from. Default root is 0. \
   -R ROOTS -r NUMROOTS, ROOTS is file containing roots, NUMROOTS is maximum number of roots in file ROOTS to peform BFS with. \
   -s SIGMA , sorting degree for SlimSell. if mode > 1, then use sorting degree. Sorting degree = 2^SIGMA, where 0 <= SIGMA <= SCALE. \
- \
