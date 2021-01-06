@@ -1,6 +1,6 @@
 # BFS with Intel Intrinsics
 
-The purpose of this project was to implement algebraic BFS and then exploit SIMD to speed up BFS. \
+The purpose of this project was to implement algebraic BFS and then exploit SIMD to speed up BFS.
 Currently there are two implementations, one using CRS format, and the other SlimSell. \
 SlimSell uses Intel Intrinsics and requires AVX2 on x86 system. \
  \
